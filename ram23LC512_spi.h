@@ -5,6 +5,8 @@
 # 
 */
 
+
+
 #ifndef RAM23LC512_h
 #define RAM23LC512_h
 #include <inttypes.h>
@@ -18,97 +20,108 @@
 
 #include "ram23LC512_spi_define.h"
 
+// =================================================
+// ===  TYPE DEF  ==================================
+// =================================================
+
+#if defined(ARDUINO_SAM_DUE)    
+    typedef union{ uint64_t _64 ;   double dbl[1] ; uint32_t _32[2] ; uint16_t _16[4] ; uint8_t _8[8] ; }  unifiedBuffer;
+#else
+    typedef union{ uint64_t _64 ;   double dbl[2] ; uint32_t _32[2] ; uint16_t _16[4] ; uint8_t _8[8] ; }  unifiedBuffer;
+#endif
+
+typedef struct{
+    uint16_t
+            type: 4,
+           count: 12,
+           index: 16;
+} File_structure; 
+
+typedef union{ uint32_t definition ; struct{ uint16_t varField ; uint16_t varIndex ; }; File_structure prop ; }  DECLARATION;
+
+// =================================================
+// === CLASS  ======================================
+// =================================================
+
 class RAM23LC512SPI{
   public:
-    RAM23LC512SPI();
-    ~RAM23LC512SPI();
 
-    uint16_t ramAdd = 0;
-    union{ uint64_t _64 ; uint32_t _32[2] ; uint16_t _16[4] ; uint8_t _8[8] ; } buffer, verif;
+    static void begin( uint8_t _cs );
 
-    void begin( uint8_t _cs );
-    void focus( uint16_t add, uint16_t index=0 );
+    static unifiedBuffer buffer;
+#ifdef RAM_verif
+    static unifiedBuffer verif;
+#endif
+    static void focus( uint16_t add );
+    static void focus( uint16_t add, uint16_t index );
 
-    // 16 bits
-    uint16_t new16( uint16_t val=0 );
-        void del16( uint16_t add );
-/*
-    // 32 bits
-    uint16_t new32( uint32_t val=0 );
-        void set32( uint16_t add, uint32_t val );
-    // 64 bits
-    uint16_t new64( uint64_t val=0 );
-    uint64_t get64( uint16_t add );
-        void set64( uint16_t add, uint64_t val );
-    
-    // double
-    uint16_t newDouble(   double val=0 );
-      double getDouble( uint16_t add );
-        void setDouble( uint16_t add, double val );
-    
-    // float
-    uint16_t newFloat(    float val=0 );
-       float getFloat( uint16_t add );
-        void setFloat( uint16_t add, float val );
-*/
-    // array 16
-    uint16_t newArray16( uint16_t q );
+    static uint16_t allocNewVar( uint8_t type, uint16_t qte=0 );
+    static void     del();
 
-
-    void write16();
-    void read16();
+    static void write();
+    static void read();
+  
+    static uint16_t freeSpace();
 
   private:
     
     // =================================================
-    // ====  MEMORY  ===================================
-    // =================================================
-
-    void alloc( uint16_t type, uint16_t q=0 );
-    void free();
-
-    // =================================================
     // ===  SPI  =======================================
     // =================================================
 
-    uint8_t cs = 0;
-    void send( uint8_t q );
-    void get(  uint8_t q );
+    static void send( uint8_t q );
+    static void get(  uint8_t q );
     
+    static uint8_t cs;
+    static bool started;
+
+    // =================================================
+    // ====  MEMORY  ===================================
+    // =================================================
+
+    static uint16_t ramAdd;         // désigne les adresses de 8 bits en ram 
+    
+    static uint32_t    size;        // désigne le nombre de bloc de 16 bits nécessaire
+    static void        setVarsSize();
+    static void        setOverallSize();
+    static DECLARATION vars;
+#ifdef RAM_verif
+    static DECLARATION backup;
+#endif
+    
+    static void alloc( uint16_t type, uint16_t q=0 );
+    static void free();
+
+    static void setVar( bool alreadySet=true );
+    static void putVar( bool alreadySet );
+    static void getVar();
+
+#ifdef RAM_verif
+    static void backupValue();
+    static void retrieveValue();
+    static bool checkValue();
+#endif
     // =================================================
     // ===  MFT  =======================================
     // =================================================
 
-    uint8_t  sector      = 0;
-    uint8_t  sectorBit   = 0;
-    uint16_t sectorAdd   = 0;
-    uint16_t sectorCount = 0;
-    uint16_t farthestSectorLocked = 0;
+    static uint8_t  sector;
+    static uint8_t  sectorBit;
+    static uint16_t sectorAdd;
+    static uint16_t sectorCount;
 
-    uint8_t   raw8 = 0;
-    uint16_t raw16 = 0;
+    static void searchFreeSpace();
+    static void format();
+    static void sectorTable( bool lock );
+    static void setSectorTable();
+    static void putSectorTable();
+    static void getSectorTable();
 
-    void searchFreeSpace( uint16_t spaceNeeded );
-    void sectorTable( uint16_t count, bool lock );
-    void setSectorTable();
-    void putSectorTable();
-    void getSectorTable();
-
-    void setDoubleHelper( double val );
-    double getDoubleHelper();
-
-    // =================================================
-    // ===  SERIAL  ====================================
-    // =================================================
-
-    void printData16();
-    void printSector();
+    static void setDoubleHelper();
+    static void getDoubleHelper();
 
 };
 
-#endif
+extern RAM23LC512SPI RAM ;
 
-#ifndef extRamDef
-#define extRamDef
-static RAM23LC512SPI extRam = RAM23LC512SPI();
 #endif
