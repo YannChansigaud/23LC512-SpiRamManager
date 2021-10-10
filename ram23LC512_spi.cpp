@@ -12,7 +12,6 @@ RAM23LC512SPI RAM;
 //                                               ---------------- // -- SIMPLE -- | --- VERIF ---
 //    SPI                                                         // ---- 2 ----- | --- 2 -------
 uint8_t  RAM23LC512SPI::cs                   = 0 ;                //      1       |     1
-bool     RAM23LC512SPI::started              = false ;            //      1       |     1
 
 //    SECTOR                                     ---------------- // ---- 8 ----- | --- 8 -------
 uint16_t RAM23LC512SPI::ramAdd               = 0 ;                //      2       |     2
@@ -22,18 +21,23 @@ uint16_t RAM23LC512SPI::sectorAdd            = 0 ;                //      2     
 uint16_t RAM23LC512SPI::sectorCount          = dataStartAdd ;     //      2       |     2
 
 //    BUFFER                                     ---------------- // ---- 8 ----- | --- 16 ------
-unifiedBuffer RAM23LC512SPI::buffer          = { 0 } ;            //      8       |     8
-#ifdef RAM_verif
-unifiedBuffer RAM23LC512SPI::verif           = { 0 } ;            //      -       |     8
-#endif
+unifiedBuffer RAM23LC512SPI::bufferA         = { 0 } ;            //      8       |     8
+unifiedBuffer RAM23LC512SPI::bufferB         = { 0 } ;            //      -       |     8
 //    VARS                                       ---------------- // ---- 8 ----- | --- 12 ------
 uint32_t    RAM23LC512SPI::size              = 0 ;                //      4       |     4
-DECLARATION RAM23LC512SPI::vars              = { 0 } ;            //      4       |     4
+DECLARATION RAM23LC512SPI::varsA             = { 0 } ;            //      4       |     4
 #ifdef RAM_verif
-DECLARATION RAM23LC512SPI::backup            = { 0 } ;            //      -       |     4
+DECLARATION RAM23LC512SPI::varsB             = { 0 } ;            //      -       |     4
 #endif
-//                                                       TOTAL    // ==== 26 ==== | === 38 ===== 
+//                                                       TOTAL    // ==== 25 ==== | === 78 ===== 
 
+
+bool RAM23LC512SPI::started(){
+  if( cs == 0 ){
+    begin();
+  }
+  return( cs ? true : false );
+}
 
 // ==================================================================== //
 //                                                                      //
@@ -42,8 +46,11 @@ DECLARATION RAM23LC512SPI::backup            = { 0 } ;            //      -     
 // ==================================================================== // 
 
 uint16_t RAM23LC512SPI::allocNewVar( uint8_t type, uint16_t q ){
-  alloc( type, q );
-  return( ramAdd );
+  if( started() ){
+    alloc( type, q );
+    return( ramAdd );
+  }
+  return( 0 );
 }
 void     RAM23LC512SPI::del(){
   if( ramAdd != 0 ){
@@ -62,16 +69,16 @@ void RAM23LC512SPI::focus( uint16_t add ){                              //
   ramAdd = add;                                                         // on se positionne
   getVar();                                                             // on récupère sa déclaration et son index
   setVarsSize();                                                        // on détermine la taille de chaque élément
-  ramAdd += ( vars.prop.type == RamSPI_userDefined ) ? 6 : 4;           // on se place sur le 1er index 
-  ramAdd += vars.prop.index * size ;                                    // on décale la position en ram de la valeur de index/taille
+  ramAdd += ( varsA.prop.type == RamSPI_userDefined ) ? 6 : 4;          // on se place sur le 1er index 
+  ramAdd += varsA.prop.index * size ;                                   // on décale la position en ram de la valeur de index/taille
 }                                                                       // 
 
 void RAM23LC512SPI::focus( uint16_t add, uint16_t index ){              // 
   ramAdd = add;                                                         // on se positionne
   getVar();                                                             // on récupère sa déclaration et son index
   index &= RamSPI_count_mask ;                                          // si l'index demandé dépasse la capacité du tableau, on reboucle à zéro
-  index = ( index >= vars.prop.count ) ? 0 : index ;                    // si l'index demandé est supérieur à la quantité déclarée, on le met à 0
-  vars.prop.index = index;                                              // on indique l'index demandé
+  index = ( index >= varsA.prop.count ) ? 0 : index ;                   // si l'index demandé est supérieur à la quantité déclarée, on le met à 0
+  varsA.prop.index = index;                                             // on indique l'index demandé
   setVar( newIndex );                                                   // on le mémorise pour la prochaine lecture
 }
 
@@ -92,9 +99,9 @@ void RAM23LC512SPI::format(){
 
 void RAM23LC512SPI::alloc( uint16_t type, uint16_t q ){                 // on recherche un emplacement d'une quantité q de type
   q &= RamSPI_count_mask ;                                              // on limite la quantité d'unitée
-  vars.prop.type  = type;                                               // 
-  vars.prop.count = q;                                                  // 
-  vars.prop.index = 0;                                                  // 
+  varsA.prop.type  = type;                                              // 
+  varsA.prop.count = q;                                                 // 
+  varsA.prop.index = 0;                                                 // 
   searchFreeSpace();                                                    // on recherche un emplacement adhéquat
   if( ramAdd >= dataStartAdd ){                                         //   si un emplacement a été trouvé
     sectorTable( lockdown );                                            //   on verrouille la zone occupé
@@ -105,13 +112,13 @@ void RAM23LC512SPI::alloc( uint16_t type, uint16_t q ){                 // on re
 
 void RAM23LC512SPI::setOverallSize(){                                   // calcule la taille occupée en octets
   setVarsSize();                                                        // on récupère la taille d'une seule variable
-  size *=  vars.prop.count ? vars.prop.count : 1 ;                      // il y a toujours au moins 1 éléments
-  size += ( vars.prop.type == RamSPI_userDefined ) ? 6 : 4 ;            // on y rajoute les 4 octets pour type+quantifier et index et 2 de plus si c'est une variable spéciale pour l'emplacement de sa taille unitaire
+  size *=  varsA.prop.count ? varsA.prop.count : 1 ;                    // il y a toujours au moins 1 éléments
+  size += ( varsA.prop.type == RamSPI_userDefined ) ? 6 : 4 ;           // on y rajoute les 4 octets pour type+quantifier et index et 2 de plus si c'est une variable spéciale pour l'emplacement de sa taille unitaire
 }
 
 void RAM23LC512SPI::setVarsSize(){
   size = 1 ;                                                            // il y a toujours, au moins 1 éléments
-  if( vars.prop.type == RamSPI_userDefined ){                           // exception spécifique à l'utilisation des variables spéciales.
+  if( varsA.prop.type == RamSPI_userDefined ){                          // exception spécifique à l'utilisation des variables spéciales.
     uint16_t userDefinedSize = 0 ;                                      //   
     _RAM_READ_                                                          //   ouverture en lecture
     _RAM_ADDRESS( ramAdd+4 )                                            //   on se positionne après l'index
@@ -120,7 +127,7 @@ void RAM23LC512SPI::setVarsSize(){
     size *= userDefinedSize;                                            //   on calcule la taille spécifique
   }                                                                     // 
   else{                                                                 // si c'est une variable standard
-    size <<= ( vars.prop.type & RamSPI_size_mask ) ;                    //   on calcule directement la taille
+    size <<= ( varsA.prop.type & RamSPI_size_mask ) ;                   //   on calcule directement la taille
   }
 #if defined(ARDUINO_SAM_DUE)  
   size <<= 1;
@@ -136,14 +143,14 @@ void RAM23LC512SPI::setVarsSize(){
 void RAM23LC512SPI::setVar( bool isNewVar ){
 #ifdef RAM_verif
   uint8_t nbTry  = 0; 
-  backup.definition = vars.definition;
+  varsB.definition = varsA.definition;
 #endif
   putVar( isNewVar );
 #ifdef RAM_verif
   getVar();
-  while( (backup.definition != vars.definition) && (nbTry < 10) ){
+  while( (varsB.definition != varsA.definition) && (nbTry < 10) ){
     nbTry++;
-    vars.definition = backup.definition;
+    varsA.definition = varsB.definition;
     putVar( isNewVar );
     getVar();
   }
@@ -154,19 +161,21 @@ void RAM23LC512SPI::putVar( bool isNewVar ){
   _RAM_WRITE_
   _RAM_ADDRESS( ramAdd )
   if( isNewVar ){
-    _RAM_SEND( vars.varField )
+    _RAM_SEND( varsA.varField )
   }
-  _RAM_SEND( vars.varIndex )
+  _RAM_SEND( varsA.varIndex )
   _RAM_RELEASE_
 }
 
 void RAM23LC512SPI::getVar(){
   _RAM_READ_
   _RAM_ADDRESS( ramAdd )
-  _RAM_GET( vars.varField )
-  _RAM_GET( vars.varIndex )
+  _RAM_GET( varsA.varField )
+  _RAM_GET( varsA.varIndex )
   _RAM_RELEASE_
 }
+
+
 
 // ====================================================================== //
 //                                                                        //
@@ -175,7 +184,7 @@ void RAM23LC512SPI::getVar(){
 // ====================================================================== //
 
 void RAM23LC512SPI::searchFreeSpace(){                                      // on recherche n espace libre.
-  if( started ){                                                            // 
+  if( started() ){                                                          // 
     setOverallSize();                                                       // on détermine la taille occupée en octet
     size >>= 1;                                                             // attention chaque bit dans MFT désigne un emplacement de 16 bits donc division par 2
     sectorAdd = sectorTableStartAdd;                                        // on se place au début de la table sector
@@ -216,7 +225,7 @@ void RAM23LC512SPI::searchFreeSpace(){                                      // o
 }                                                                           // 
 
 void RAM23LC512SPI::sectorTable( bool lock ){                               // 
-  if( started ){                                                            // 
+  if( started() ){                                                            // 
     uint32_t count = size;                                                  // l'unité de la ram est l'octet 8 bits (pas 16 bits)
     sectorCount += lock ? count : -count ;                                  // 
     count >>= 1;                                                            // l'unité de la MFT est le block de 16 bits donc division par 2
@@ -271,8 +280,8 @@ void RAM23LC512SPI::getSectorTable(){
 //                                                                      //
 // ==================================================================== // 
 
-void RAM23LC512SPI::begin( uint8_t _cs ){
-  cs = _cs;
+void RAM23LC512SPI::begin(){
+  cs = RamSPI_cs;
   if( cs > 0 ){
     pinMode( cs , OUTPUT );
     _RAM_CONFIG_
@@ -285,13 +294,11 @@ void RAM23LC512SPI::begin( uint8_t _cs ){
       _RAM_SEND8( 0 )
     }
     _RAM_RELEASE_
-
-    started = true;
   }
 }
 
 void RAM23LC512SPI::send( uint8_t q ){
-  if( started ){
+  if( started() ){
     _RAM_WRITE_                                 // on ouvre le canal en écriture
     _RAM_ADDRESS( ramAdd )                      // on envoi l'adresse
     while( q-- ){                               // pour chaque paquet de 8 bits
@@ -302,7 +309,7 @@ void RAM23LC512SPI::send( uint8_t q ){
 }
 
 void RAM23LC512SPI::get( uint8_t q ){
-  if( started ){
+  if( started() ){
     _RAM_READ_                                  // on ouvre le canal en écriture
     _RAM_ADDRESS( ramAdd )                      // on envoi l'adresse
     while( q-- ){                               // pour chaque paquet de 8 bits
@@ -321,7 +328,30 @@ void RAM23LC512SPI::get( uint8_t q ){
 
 
 void RAM23LC512SPI::write(){
-  if( ramAdd > sectorTableEndAdd ){
+  if( ramAdd > sectorTableEndAdd                                                                        // si l'adresse en ram est définie
+  && varsA.prop.type != RamSPI_userDefined                                                              // et que la variable actuelle n'est pas un format défini par l'utilisateur
+  && varsB.prop.type != RamSPI_userDefined ){                                                           // et que la variable précédente n'était pas non plus un format défini par l'utilisateur
+    verif64 = buffer64;                                                                                 //   conversion de double -> int ou int -> double
+    if( ( varsB.prop.type > RamSPI_int64_t ) && ( varsA.prop.type < RamSPI_float_double ) ){            //   si c'est un double à ranger dans un entier
+      switch( varsA.prop.type ){                                                                        //     suivant le type de la variable de destination
+        case RamSPI_uint16_t      :{   buffer16 = verifDBL ;   break;  }                                //       double dans un entier 16 bits non signé
+        case RamSPI_uint32_t      :{   buffer32 = verifDBL ;   break;  }                                //       - - - - - - - - - - - 32 bits - - - - -
+        case RamSPI_uint64_t      :{   buffer64 = verifDBL ;   break;  }                                //       - - - - - - - - - - - 64 bits - - - - -
+        case RamSPI_int16_t       :{   buffer16 = verifDBL ;   break;  }                                //       - - - - - - - - - - - 16 bits signé
+        case RamSPI_int32_t       :{   buffer32 = verifDBL ;   break;  }                                //       - - - - - - - - - - - 32 bits - - -
+        case RamSPI_int64_t       :{   buffer64 = verifDBL ;   break;  }                                //       - - - - - - - - - - - 64 bits - - -
+      }                                                                                                 // 
+    }                                                                                                   // 
+    else if( ( varsB.prop.type < RamSPI_float_double ) && ( varsA.prop.type > RamSPI_int64_t ) ) {      //   si la précédente valeur lue était de type entière et qu'on s'apprête à écrire dans un double
+      switch( varsB.prop.type ){                                                                        //     suivant le type de la précédente valeur
+        case RamSPI_uint16_t      :{   bufferDBL = verif16 ;   break;  }                                //       16 bits non signé dans un double
+        case RamSPI_uint32_t      :{   bufferDBL = verif32 ;   break;  }                                //       32 bits - - - - - - - - - - - - -
+        case RamSPI_uint64_t      :{   bufferDBL = verif64 ;   break;  }                                //       64 bits - - - - - - - - - - - - -
+        case RamSPI_int16_t       :{   bufferDBL = verif16 ;   break;  }                                //       16 bits signé dans un double
+        case RamSPI_int32_t       :{   bufferDBL = verif32 ;   break;  }                                //       32 bits - - - - - - - - - - -
+        case RamSPI_int64_t       :{   bufferDBL = verif64 ;   break;  }                                //       64 bits - - - - - - - - - - -
+      }                                                                                                 // 
+    }                                                                                                   // 
 #ifdef RAM_verif
     uint8_t nbTry = 0;
     backupValue();
@@ -339,13 +369,76 @@ void RAM23LC512SPI::write(){
   }
 }
 
-void RAM23LC512SPI::read(){
-  if( ramAdd < dataStartAdd ){
-    buffer64 = 0;
-  }
-  else{
+
+void RAM23LC512SPI::read_partA(){   read( false );    }
+void RAM23LC512SPI::read_partB(){   read( true  );    }
+
+void RAM23LC512SPI::read( bool part ){
+  varsA_64 = 0;
+  if( ramAdd > sectorTableEndAdd ){
     get( size );
+    if( part ){
+      varsB_64 = varsA_64 ;
+      varsB.definition = varsA.definition;
+    }
   }
+}
+
+
+void RAM23LC512SPI::doMath( uint8_t op ){
+  if( varsA.prop.type < RamSPI_userDefined && varsB.prop.type < RamSPI_userDefined ){
+    uint8_t opType = opType_notDefined;
+    if( varsA.prop.type == RamSPI_float_double && varsB.prop.type == RamSPI_float_double ){   opType = opType_dbl_on_dbl;   }
+    if( varsA.prop.type  < RamSPI_float_double && varsB.prop.type == RamSPI_float_double ){   opType = opType_dbl_on_int;   }
+    if( varsA.prop.type == RamSPI_float_double && varsB.prop.type  < RamSPI_float_double ){   opType = opType_int_on_dbl;   }
+    if( varsA.prop.type  < RamSPI_float_double && varsB.prop.type  < RamSPI_float_double ){   opType = opType_int_on_int;   }
+    switch( opType ){
+      case opType_dbl_on_dbl :{
+        switch( op ){
+          case opCode_affectation     :{    varsA_DBL  = varsB_DBL;  break;  }
+          case opCode_addition        :{    varsA_DBL += varsB_DBL;  break;  }
+          case opCode_soustraction    :{    varsA_DBL -= varsB_DBL;  break;  }
+          case opCode_multiplication  :{    varsA_DBL *= varsB_DBL;  break;  }
+          case opCode_division        :{    varsA_DBL /= varsB_DBL;  break;  }
+        }
+        break;
+      }
+      case opType_int_on_dbl :{
+        switch( op ){
+          case opCode_affectation     :{    varsA_DBL  = varsB_64;  break;  }
+          case opCode_addition        :{    varsA_DBL += varsB_64;  break;  }
+          case opCode_soustraction    :{    varsA_DBL -= varsB_64;  break;  }
+          case opCode_multiplication  :{    varsA_DBL *= varsB_64;  break;  }
+          case opCode_division        :{    varsA_DBL /= varsB_64;  break;  }
+        }
+        break;
+      }
+      case opType_dbl_on_int :{
+        switch( op ){
+          case opCode_affectation     :{    varsA_64  = varsB_DBL;  break;  }
+          case opCode_addition        :{    varsA_64 += varsB_DBL;  break;  }
+          case opCode_soustraction    :{    varsA_64 -= varsB_DBL;  break;  }
+          case opCode_multiplication  :{    varsA_64 *= varsB_DBL;  break;  }
+          case opCode_division        :{    varsA_64 /= varsB_DBL;  break;  }
+        }
+        break;
+      }
+      case opType_int_on_int :{
+        switch( op ){
+          case opCode_affectation     :{    varsA_64  = varsB_64;  break;  }
+          case opCode_addition        :{    varsA_64 += varsB_64;  break;  }
+          case opCode_soustraction    :{    varsA_64 -= varsB_64;  break;  }
+          case opCode_multiplication  :{    varsA_64 *= varsB_64;  break;  }
+          case opCode_division        :{    varsA_64 /= varsB_64;  break;  }
+        }
+        break;
+      }
+    }
+  }
+}
+
+uint8_t RAM23LC512SPI::varType(){
+  return( varsA.prop.type );
 }
 
 uint16_t RAM23LC512SPI::freeSpace(){

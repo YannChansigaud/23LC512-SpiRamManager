@@ -7,16 +7,23 @@
 ###########################################
 
 RAM23LC512	KEYWORD1
-free	KEYWORD1
+RAM	KEYWORD1
 
 
 ###########################################
 # Methods and Functions (KEYWORD2)
 ###########################################
-_uint16_t	KEYWORD2
+alloc	KEYWORD2
+printAdd	KEYWORD2
+freeSpace	KEYWORD2
+del	KEYWORD2
+
 
 #######################################
 # Constants (LITERAL1)
 #######################################
 
 _uint16_t	LITERAL1
+_uint32_t	LITERAL1
+_uint64_t	LITERAL1
+_double 	LITERAL1

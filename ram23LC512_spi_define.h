@@ -1,5 +1,9 @@
 #define RAM_verif     
 
+#ifndef RamSPI_cs
+#define RamSPI_cs 10
+#endif
+
 #define RamSPI_read                 B00000011
 #define RamSPI_write                B00000010
 #define RamSPI_modeGet              B00000101
@@ -63,29 +67,59 @@
 //                                : ....        // ...
 
 
-#define buffer8       buffer._8[0]
-#define bufferN8(a)   buffer._8[a]
-#define verif8        verif._8[0]
-#define verifN8(a)    verif._8[a]
+#define buffer8       bufferA._8[0]
+#define bufferN8(a)   bufferA._8[a]
+#define verif8        bufferB._8[0]
+#define verifN8(a)    bufferB._8[a]
 
-#define buffer16      buffer._16[0]
-#define bufferN16(a)  buffer._16[a]
-#define verif16       verif._16[0]
-#define verifN16(a)   verif._16[a]
+#define buffer16      bufferA._16[0]
+#define bufferN16(a)  bufferA._16[a]
+#define verif16       bufferB._16[0]
+#define verifN16(a)   bufferB._16[a]
 
-#define buffer32      buffer._32[0]
-#define bufferN32(a)  buffer._32[a]
-#define verif32       verif._32[0]
-#define verifN32(a)   verif._32[a]
+#define buffer32      bufferA._32[0]
+#define bufferN32(a)  bufferA._32[a]
+#define verif32       bufferB._32[0]
+#define verifN32(a)   bufferB._32[a]
 
-#define bufferDBL     buffer.dbl[0]
-#define verifDBL      verif.dbl[0]
+#define bufferDBL     bufferA.dbl[0]
+#define verifDBL      bufferB.dbl[0]
 
-#define buffer64      buffer._64
-#define verif64       verif._64
+#define buffer64      bufferA._64[0]
+#define verif64       bufferB._64[0]
 
 #define newVar    true
 #define newIndex  false
 
 #define lockdown  true
 #define release   false
+
+
+#define opCode_affectation      1
+#define opCode_addition         2
+#define opCode_soustraction     3
+#define opCode_multiplication   4
+#define opCode_division         5
+#define opCode_incrementation   6
+#define opCode_decrementation   7
+
+#define opType_notDefined   0
+#define opType_int_on_dbl   1
+#define opType_dbl_on_int   2
+#define opType_int_on_int   3
+#define opType_dbl_on_dbl   4
+
+#define varsA_read    false
+#define varsB_read    true
+
+#define varsA_8       bufferA._8[0]
+#define varsA_16      bufferA._16[0]
+#define varsA_32      bufferA._32[0]
+#define varsA_64      bufferA._64[0]
+#define varsA_DBL     bufferA.dbl[0]
+
+#define varsB_8       bufferB._8[0]
+#define varsB_16      bufferB._16[0]
+#define varsB_32      bufferB._32[0]
+#define varsB_64      bufferB._64[0]
+#define varsB_DBL     bufferB.dbl[0]
